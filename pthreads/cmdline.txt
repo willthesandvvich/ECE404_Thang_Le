@@ -1,0 +1,450 @@
+single thread
+In main: creating thread 0
+In main: joining thread 0
+It's me, thread #140735163781552!
+In main: creating thread 0
+In main: creating thread 1
+In main: joining thread 0
+It's me, thread #140720830229568!
+It's me, thread #140720830229576!
+In main: joining thread 1
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+It's me, thread #140730317817072!
+It's me, thread #140730317817080!
+In main: joining thread 0
+It's me, thread #140730317817088!
+In main: joining thread 1
+In main: joining thread 2
+4 threads
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140732903050784!
+In main: joining thread 0
+It's me, thread #140732903050792!
+It's me, thread #140732903050808!
+It's me, thread #140732903050800!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140727418353280!
+In main: creating thread 4
+It's me, thread #140727418353288!
+It's me, thread #140727418353304!
+It's me, thread #140727418353296!
+In main: joining thread 0
+It's me, thread #140727418353312!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140725441185648!
+In main: creating thread 4
+It's me, thread #140725441185656!
+It's me, thread #140725441185672!
+It's me, thread #140725441185664!
+In main: creating thread 5
+It's me, thread #140725441185680!
+In main: joining thread 0
+It's me, thread #140725441185688!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140723201773360!
+In main: creating thread 4
+It's me, thread #140723201773368!
+It's me, thread #140723201773384!
+It's me, thread #140723201773376!
+In main: creating thread 5
+It's me, thread #140723201773392!
+In main: creating thread 6
+It's me, thread #140723201773400!
+In main: joining thread 0
+It's me, thread #140723201773408!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: joining thread 6
+8 threads
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140726042196928!
+In main: creating thread 4
+It's me, thread #140726042196936!
+It's me, thread #140726042196952!
+It's me, thread #140726042196944!
+In main: creating thread 5
+It's me, thread #140726042196960!
+In main: creating thread 6
+It's me, thread #140726042196968!
+In main: creating thread 7
+It's me, thread #140726042196976!
+In main: joining thread 0
+It's me, thread #140726042196984!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: joining thread 6
+In main: joining thread 7
+16 threads
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140722308211504!
+In main: creating thread 4
+It's me, thread #140722308211512!
+It's me, thread #140722308211528!
+It's me, thread #140722308211520!
+In main: creating thread 5
+It's me, thread #140722308211536!
+In main: creating thread 6
+It's me, thread #140722308211544!
+In main: creating thread 7
+It's me, thread #140722308211552!
+In main: creating thread 8
+In main: creating thread 9
+In main: creating thread 10
+In main: creating thread 11
+In main: creating thread 12
+In main: creating thread 13
+In main: creating thread 14
+In main: creating thread 15
+In main: joining thread 0
+It's me, thread #140722308211624!
+It's me, thread #140722308211568!
+It's me, thread #140722308211576!
+It's me, thread #140722308211560!
+It's me, thread #140722308211608!
+It's me, thread #140722308211616!
+It's me, thread #140722308211592!
+It's me, thread #140722308211584!
+It's me, thread #140722308211600!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: joining thread 6
+In main: joining thread 7
+In main: joining thread 8
+In main: joining thread 9
+In main: joining thread 10
+In main: joining thread 11
+In main: joining thread 12
+In main: joining thread 13
+In main: joining thread 14
+In main: joining thread 15
+32 threads
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+In main: creating thread 3
+It's me, thread #140731473792176!
+In main: creating thread 4
+It's me, thread #140731473792184!
+It's me, thread #140731473792200!
+It's me, thread #140731473792192!
+In main: creating thread 5
+It's me, thread #140731473792208!
+In main: creating thread 6
+It's me, thread #140731473792216!
+In main: creating thread 7
+It's me, thread #140731473792224!
+In main: creating thread 8
+In main: creating thread 9
+It's me, thread #140731473792232!
+In main: creating thread 10
+In main: creating thread 11
+In main: creating thread 12
+In main: creating thread 13
+It's me, thread #140731473792264!
+It's me, thread #140731473792240!
+In main: creating thread 14
+It's me, thread #140731473792256!
+It's me, thread #140731473792272!
+In main: creating thread 15
+It's me, thread #140731473792280!
+In main: creating thread 16
+In main: creating thread 17
+In main: creating thread 18
+In main: creating thread 19
+In main: creating thread 20
+In main: creating thread 21
+In main: creating thread 22
+In main: creating thread 23
+In main: creating thread 24
+In main: creating thread 25
+In main: creating thread 26
+In main: creating thread 27
+In main: creating thread 28
+It's me, thread #140731473792288!
+In main: creating thread 29
+In main: creating thread 30
+In main: creating thread 31
+In main: joining thread 0
+It's me, thread #140731473792296!
+It's me, thread #140731473792248!
+It's me, thread #140731473792368!
+It's me, thread #140731473792376!
+It's me, thread #140731473792416!
+It's me, thread #140731473792424!
+It's me, thread #140731473792392!
+It's me, thread #140731473792400!
+It's me, thread #140731473792408!
+It's me, thread #140731473792320!
+It's me, thread #140731473792384!
+It's me, thread #140731473792360!
+It's me, thread #140731473792312!
+It's me, thread #140731473792352!
+It's me, thread #140731473792336!
+It's me, thread #140731473792304!
+It's me, thread #140731473792328!
+It's me, thread #140731473792344!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: joining thread 6
+In main: joining thread 7
+In main: joining thread 8
+In main: joining thread 9
+In main: joining thread 10
+In main: joining thread 11
+In main: joining thread 12
+In main: joining thread 13
+In main: joining thread 14
+In main: joining thread 15
+In main: joining thread 16
+In main: joining thread 17
+In main: joining thread 18
+In main: joining thread 19
+In main: joining thread 20
+In main: joining thread 21
+In main: joining thread 22
+In main: joining thread 23
+In main: joining thread 24
+In main: joining thread 25
+In main: joining thread 26
+In main: joining thread 27
+In main: joining thread 28
+In main: joining thread 29
+In main: joining thread 30
+In main: joining thread 31
+64 threads
+In main: creating thread 0
+In main: creating thread 1
+In main: creating thread 2
+It's me, thread #140726011923680!
+In main: creating thread 3
+It's me, thread #140726011923688!
+In main: creating thread 4
+It's me, thread #140726011923704!
+It's me, thread #140726011923696!
+In main: creating thread 5
+It's me, thread #140726011923712!
+In main: creating thread 6
+It's me, thread #140726011923720!
+In main: creating thread 7
+It's me, thread #140726011923728!
+In main: creating thread 8
+In main: creating thread 9
+In main: creating thread 10
+In main: creating thread 11
+It's me, thread #140726011923736!
+In main: creating thread 12
+It's me, thread #140726011923768!
+It's me, thread #140726011923744!
+It's me, thread #140726011923752!
+In main: creating thread 13
+It's me, thread #140726011923760!
+It's me, thread #140726011923776!
+In main: creating thread 14
+In main: creating thread 15
+In main: creating thread 16
+In main: creating thread 17
+In main: creating thread 18
+In main: creating thread 19
+In main: creating thread 20
+In main: creating thread 21
+In main: creating thread 22
+In main: creating thread 23
+In main: creating thread 24
+In main: creating thread 25
+In main: creating thread 26
+It's me, thread #140726011923792!
+It's me, thread #140726011923784!
+It's me, thread #140726011923816!
+It's me, thread #140726011923832!
+It's me, thread #140726011923888!
+In main: creating thread 27
+In main: creating thread 28
+It's me, thread #140726011923848!
+It's me, thread #140726011923864!
+It's me, thread #140726011923856!
+In main: creating thread 29
+In main: creating thread 30
+In main: creating thread 31
+In main: creating thread 32
+In main: creating thread 33
+It's me, thread #140726011923880!
+It's me, thread #140726011923840!
+It's me, thread #140726011923824!
+In main: creating thread 34
+It's me, thread #140726011923896!
+It's me, thread #140726011923904!
+In main: creating thread 35
+In main: creating thread 36
+In main: creating thread 37
+In main: creating thread 38
+In main: creating thread 39
+In main: creating thread 40
+In main: creating thread 41
+In main: creating thread 42
+In main: creating thread 43
+In main: creating thread 44
+In main: creating thread 45
+In main: creating thread 46
+In main: creating thread 47
+In main: creating thread 48
+In main: creating thread 49
+In main: creating thread 50
+It's me, thread #140726011923808!
+In main: creating thread 51
+In main: creating thread 52
+In main: creating thread 53
+In main: creating thread 54
+In main: creating thread 55
+In main: creating thread 56
+In main: creating thread 57
+In main: creating thread 58
+In main: creating thread 59
+In main: creating thread 60
+In main: creating thread 61
+In main: creating thread 62
+In main: creating thread 63
+In main: joining thread 0
+It's me, thread #140726011924000!
+It's me, thread #140726011923936!
+It's me, thread #140726011924104!
+It's me, thread #140726011924160!
+It's me, thread #140726011924008!
+It's me, thread #140726011924024!
+It's me, thread #140726011923944!
+It's me, thread #140726011924088!
+It's me, thread #140726011924144!
+It's me, thread #140726011924056!
+It's me, thread #140726011923960!
+It's me, thread #140726011924080!
+It's me, thread #140726011924136!
+It's me, thread #140726011924176!
+It's me, thread #140726011923968!
+It's me, thread #140726011923992!
+It's me, thread #140726011924168!
+It's me, thread #140726011923800!
+It's me, thread #140726011924120!
+It's me, thread #140726011924064!
+It's me, thread #140726011924184!
+It's me, thread #140726011924048!
+It's me, thread #140726011923928!
+It's me, thread #140726011924128!
+It's me, thread #140726011924040!
+It's me, thread #140726011923984!
+It's me, thread #140726011924096!
+It's me, thread #140726011924152!
+It's me, thread #140726011924032!
+It's me, thread #140726011924016!
+It's me, thread #140726011923920!
+It's me, thread #140726011923872!
+It's me, thread #140726011923976!
+It's me, thread #140726011923952!
+It's me, thread #140726011923912!
+It's me, thread #140726011924072!
+It's me, thread #140726011924112!
+In main: joining thread 1
+In main: joining thread 2
+In main: joining thread 3
+In main: joining thread 4
+In main: joining thread 5
+In main: joining thread 6
+In main: joining thread 7
+In main: joining thread 8
+In main: joining thread 9
+In main: joining thread 10
+In main: joining thread 11
+In main: joining thread 12
+In main: joining thread 13
+In main: joining thread 14
+In main: joining thread 15
+In main: joining thread 16
+In main: joining thread 17
+In main: joining thread 18
+In main: joining thread 19
+In main: joining thread 20
+In main: joining thread 21
+In main: joining thread 22
+In main: joining thread 23
+In main: joining thread 24
+In main: joining thread 25
+In main: joining thread 26
+In main: joining thread 27
+In main: joining thread 28
+In main: joining thread 29
+In main: joining thread 30
+In main: joining thread 31
+In main: joining thread 32
+In main: joining thread 33
+In main: joining thread 34
+In main: joining thread 35
+In main: joining thread 36
+In main: joining thread 37
+In main: joining thread 38
+In main: joining thread 39
+In main: joining thread 40
+In main: joining thread 41
+In main: joining thread 42
+In main: joining thread 43
+In main: joining thread 44
+In main: joining thread 45
+In main: joining thread 46
+In main: joining thread 47
+In main: joining thread 48
+In main: joining thread 49
+In main: joining thread 50
+In main: joining thread 51
+In main: joining thread 52
+In main: joining thread 53
+In main: joining thread 54
+In main: joining thread 55
+In main: joining thread 56
+In main: joining thread 57
+In main: joining thread 58
+In main: joining thread 59
+In main: joining thread 60
+In main: joining thread 61
+In main: joining thread 62
+In main: joining thread 63

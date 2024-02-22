@@ -1,0 +1,91 @@
+hello 
+single thread
+
+real	3m30.252s
+user	3m20.500s
+sys	0m0.144s
+4 threads
+
+real	0m57.543s
+user	2m59.116s
+sys	0m1.285s
+8 threads
+  
+real	0m54.940s
+user	5m35.427s
+sys	0m12.328s
+16 threads
+
+real	1m9.396s
+user	6m42.055s
+sys	1m4.119s
+32 threads
+
+real	1m53.399s
+user	9m34.124s
+sys	3m52.413s
+64 threads
+
+real	3m35.065s
+user	15m31.764s
+sys	10m16.868s
+
+2nd run
+
+hello 
+single thread
+
+real	3m30.286s
+user	3m20.048s
+sys	0m0.166s
+2 threads
+
+real	1m49.498s
+user	3m10.952s
+sys	0m0.232s
+3 threads
+
+real	1m20.575s
+user	2m59.583s
+sys	0m0.844s
+4 threads
+
+real	1m0.150s
+user	2m58.909s
+sys	0m1.009s
+5 threads
+
+real	1m1.795s
+user	3m41.624s
+sys	0m2.748s
+6 threads
+
+real	0m58.781s
+user	4m7.077s
+sys	0m5.352s
+7 threads
+
+real	1m1.393s
+user	4m52.227s
+sys	0m9.783s
+8 threads
+
+real	0m58.013s
+user	5m37.495s
+sys	0m14.016s
+16 threads
+
+real	1m9.835s
+user	6m33.683s
+sys	0m57.174s
+32 threads
+
+real	1m56.801s
+user	9m21.061s
+sys	3m36.254s
+64 threads
+
+real	3m26.449s
+user	15m31.600s
+sys	10m16.679s
+
