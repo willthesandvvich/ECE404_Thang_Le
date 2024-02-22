@@ -1,0 +1,31 @@
+#!/bin/bash
+gcc -pthread -Wall -std=c99 Assignment1.c
+echo 'hello '
+echo 'single thread' > cmdline.txt
+echo 'single thread'
+time ./a.out 1 mat4k.txt result.txt >> cmdline.txt
+echo '2 threads' 
+time ./a.out 2 mat4k.txt result.txt >> cmdline.txt
+echo '3 threads'
+time ./a.out 3 mat4k.txt result.txt >> cmdline.txt
+echo '4 threads' >> cmdline.txt
+echo '4 threads' 
+time ./a.out 4 mat4k.txt result.txt >> cmdline.txt
+echo '5 threads'
+time ./a.out 5 mat4k.txt result.txt >> cmdline.txt
+echo '6 threads'
+time ./a.out 6 mat4k.txt result.txt >> cmdline.txt
+echo '7 threads'
+time ./a.out 7 mat4k.txt result.txt >> cmdline.txt
+echo '8 threads' >> cmdline.txt
+echo '8 threads'
+time ./a.out 8 mat4k.txt result.txt >> cmdline.txt
+echo '16 threads' >> cmdline.txt
+echo '16 threads'
+time ./a.out 16 mat4k.txt result.txt >> cmdline.txt
+echo '32 threads' >> cmdline.txt
+echo '32 threads'
+time ./a.out 32 mat4k.txt result.txt >> cmdline.txt
+echo '64 threads' >> cmdline.txt
+echo '64 threads'
+time ./a.out 64 mat4k.txt result.txt >> cmdline.txt
