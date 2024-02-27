@@ -24,6 +24,7 @@ struct ThreadLim
     int end;
 };
 
+
 // Initialize mutex lock
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -71,24 +72,18 @@ int WriteMatrix(int dim, int mat[][dim], const char* filename){
 
 // Method for Matrix Multiplication 
 void *MultMatrix (void *threadid){
-    long tid = (long)threadid;
-    int i,j,k, tmp;
-    printf("It's me, thread #%ld!\n", tid);
+    int i,j,k,tmp = 0;
+    int *data = (int *) threadid;
+    int x = data[0];
 
     // Matrix Mult
-    struct ThreadLim * range = (struct ThreadLim *) threadid;   // Initiaing the end and start of thread iterations
-    for (i = 0; i < SIZE; i++) {            
-        for (j = 0; j < SIZE; j++) {
-            tmp = 0;                                        // If we were to implement line 86->88 here, 
-             for (k = range->start; k < range->end; k++) {      // we would run into a problem where one thread is running faster,
-                tmp += matrix[i][k] * matrix[k][j];             // which would lead to an incorrect matrix multiplication.
-            }
-            //pthread_mutex_lock(&lock);
-            result[i][j] += tmp;
-           // pthread_mutex_unlock(&lock);
-        }
+    //struct ThreadLim * range = (struct ThreadLim *) threadid;   // Initiaing the end and start of thread iterations
+    for (i = 1; i <= x; i++) {            
+            tmp += data[i]*data[i+x];        
     }
-    pthread_exit(NULL); 
+    int *p = (int*)malloc(sizeof(int));
+    *p = k;
+    pthread_exit(p); 
 }
 
 // Main Method for execution
@@ -99,38 +94,34 @@ int main(int argc, char *argv[])
     // Number of threads being run
     int NumThreads = atoi(argv[1]);     
     pthread_t threads[NumThreads];
-    struct ThreadLim limit[NumThreads];
-    int Start, MaxRange = 0;
-    // To split each thread into each rows
-    MaxRange = SIZE / NumThreads;
-
-    // Restart thread "starting point" on every line after x number of threads
-    // For example, running 16 threads means that for every 16 rows,
-    // we reset the range (thread iterations) in the following for loop at line 122
-    for(i = 0; i < NumThreads; i++) {
-        limit[i].start = Start;
-        limit[i].end = Start + MaxRange;
-        Start += MaxRange;
-    }
-
-    // Forcing the end limit of iterations
-    limit[NumThreads - 1].end = SIZE;
 
     //Reading matrix from input TXT file
     ReadMatrix(SIZE, matrix, argv[2]);
 
+    int* data = NULL;
+    int j,k1,k2;
     // Creating threads and joining 
+   
     for(t = 0; t < NumThreads; t++){
         printf("In main: creating thread %d\n", t);
-        rc = pthread_create(&threads[t], NULL, MultMatrix, &limit[t]);
-        if (rc){
-            printf("ERROR; return code from pthread_create() is %d\n", rc);
-            exit(-1);
+        for (i = 0; i < SIZE; i++){
+        for (j = 0; j < SIZE; j++){
+            data[0] = SIZE;
+            for(k1 = 0; k1 < SIZE; k1++){ data[k1+1] = matrix[i][k1]; }
+            for(k2 = 0; k2 < SIZE; k2++){ data[k2+SIZE+1] = matrix[k2][j]; }
+            rc = pthread_create(&threads[t], NULL, MultMatrix, (void*)(data));
+            if (rc){
+                printf("ERROR; return code from pthread_create() is %d\n", rc);
+                exit(-1);
+            }
         }
+
+        }
+        
     }
-    for(t = 0; t < NumThreads; t++){
-        printf("In main: joining thread %d\n", t);
-        pthread_join(threads[t], NULL);
+    for(t = 0; t < SIZE; t++){
+        void *k;
+        pthread_join(threads[t], &k);
     }
 
     // Writing to output TXT file
@@ -138,4 +129,5 @@ int main(int argc, char *argv[])
 
     /* Last thing that main() should do */
     pthread_exit(NULL);
+    return 0;
 }
