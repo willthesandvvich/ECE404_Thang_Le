@@ -1,7 +1,7 @@
 /******************************************************************************
-* FILE: Assignment1.c
+* FILE: Assignment3.c
 * DESCRIPTION:
-*   ECE404 Assignment 1
+*   ECE404 Assignment 3 Task 2
 * AUTHOR: Thang LE
 
 ******************************************************************************/
@@ -11,7 +11,7 @@
 #include <string.h>
 
 //Global Constants
-#define SIZE 200
+#define SIZE 50
 
 // Global Variables
 int matrix[SIZE][SIZE];
@@ -23,111 +23,137 @@ struct ThreadLim
     int start;
     int end;
 };
+// struct for each matrix
+struct matrix {
+    int rows;
+    int cols;
+    int **arr;
+};
 
+// struct to pass as argument
+struct multiplication {
+    int row;
+    int col;
+    struct matrix *A;
+    struct matrix *B;
+    struct matrix *result_mat;
+};
 
-// Initialize mutex lock
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-
-// Method for reading the input Matrix from cmd line arguments
-int ReadMatrix(int dim, int mat[][dim], const char* filename)
-{
+void ReadMatrix(const char* filename, struct matrix *m) {   
     FILE *rf = fopen (filename, "r");
     if (rf == NULL){
         printf("Error opening file!\n");
-        return 0;
+        exit(-1);
     }
 
-    int i,j; 
-    for(i = 0; i < dim; i++)
-    {
-        for(j = 0; j < dim; j++){
-            fscanf(rf, "%d ", &mat[i][j]);
+    int rows, cols, check;
+    rows = SIZE;
+    cols = SIZE;
+
+    m->rows = rows;
+    m->cols = cols;
+    int **arr = (int **) malloc(rows * sizeof(int *));
+    for (int i = 0; i < rows; i++) {
+        arr[i] = (int *) malloc(cols * sizeof(int));
+        for (int j = 0; j < cols; j++) {
+            check = fscanf(rf, "%d", &arr[i][j]);
+            if ( check != 1) {
+                printf("Error reading the file: %s\n", filename);
+                exit(-1);
+            }
         }
     }
-    fclose (rf); 
-    return 1;
+    m->arr = arr;
+
+    fclose(rf);
 }
 
 // Method for writing onto an TXT file
-int WriteMatrix(int dim, int mat[][dim], const char* filename){
+void WriteMatrix(const char* filename, struct matrix *result_mat){
     // Printing the output onto an external .txt file
     FILE *wf = fopen(filename, "w");
     if (wf == NULL)
     {
         printf("Error opening file!\n");
-        return 0;
+        exit(-1);
     }
     
     int i,j;
-    for(i = 0; i < SIZE; i++)
+    for(i = 0; i < result_mat->rows; i++)
     {
-        for(j = 0; j < SIZE; j++){
-            fprintf(wf, "%d ", mat[i][j]);
+        for(j = 0; j < result_mat->cols; j++){
+            fprintf(wf, "%d ", result_mat->arr[i][j]);
         }
         fprintf(wf, "\n");
     }
     fclose(wf);
-    return 1;
 }
 
-// Method for Matrix Multiplication 
-void *MultMatrix (void *threadid){
-    int i,j,k,tmp = 0;
-    int *data = (int *) threadid;
-    int x = data[0];
 
-    // Matrix Mult
-    //struct ThreadLim * range = (struct ThreadLim *) threadid;   // Initiaing the end and start of thread iterations
-    for (i = 1; i <= x; i++) {            
-            tmp += data[i]*data[i+x];        
+// Method for Matrix Multiplication 
+void *MultMatrix (void *args){
+    struct multiplication *element;
+    element = (struct multiplication *) args;
+    int tmp = 0;
+    for (int k = 0; k < element->B->rows; k++) {
+        tmp += element->A->arr[element->row][k] * element->B->arr[k][element->col];
     }
-    int *p = (int*)malloc(sizeof(int));
-    *p = k;
-    pthread_exit(p); 
+    element->result_mat->arr[element->row][element->col] = tmp;
+    free(element);
+    pthread_exit(NULL);
 }
 
 // Main Method for execution
 int main(int argc, char *argv[])
 {
     // Variables
-    int rc, i, t;
-    // Number of threads being run
+    int rc;
     int NumThreads = atoi(argv[1]);     
     pthread_t threads[NumThreads];
+    struct matrix *A = malloc(sizeof(struct matrix));
+    struct matrix *B = malloc(sizeof(struct matrix));
+    struct matrix *result_mat = malloc(sizeof(struct matrix));
 
-    //Reading matrix from input TXT file
-    ReadMatrix(SIZE, matrix, argv[2]);
+    ReadMatrix(argv[2], A);
+    ReadMatrix(argv[2], B);
 
-    int* data = NULL;
-    int j,k1,k2;
-    // Creating threads and joining 
-   
-    for(t = 0; t < NumThreads; t++){
-        printf("In main: creating thread %d\n", t);
-        for (i = 0; i < SIZE; i++){
-        for (j = 0; j < SIZE; j++){
-            data[0] = SIZE;
-            for(k1 = 0; k1 < SIZE; k1++){ data[k1+1] = matrix[i][k1]; }
-            for(k2 = 0; k2 < SIZE; k2++){ data[k2+SIZE+1] = matrix[k2][j]; }
-            rc = pthread_create(&threads[t], NULL, MultMatrix, (void*)(data));
-            if (rc){
-                printf("ERROR; return code from pthread_create() is %d\n", rc);
-                exit(-1);
+    int rows = A->rows, cols = B->cols;
+    
+    int **temprow = (int **) calloc(A->rows, sizeof(int *));
+    for (int i = 0; i < A->rows; i++) {
+        temprow[i] = (int *) calloc(B->cols, sizeof(int));
+    }
+    
+    result_mat->rows = A->rows; result_mat->cols = B->cols; result_mat->arr = temprow;
+    
+    for (int i = 0; i < rows; i++) {
+        for (int t=0; t < NumThreads; t++){
+        for (int j = 0; j < cols; j++) {
+            
+                struct multiplication *element = malloc(sizeof(struct multiplication));
+                element->row = i; element->col = j;
+                element->A = A; element->B = B; element->result_mat = result_mat;
+                rc = pthread_create(&threads[t], NULL, MultMatrix, (void *) element);
+                if (rc) 
+                {
+                    printf("ERROR; return code from pthread_create() is %d\n", rc);
+                    exit(1);
+                }
             }
         }
-
+    }
+    
+    for (int i = 0; i < rows; i++) {
+        for (int t=0; t < NumThreads; t++){
+        for (int j = 0; j < cols; j++) {
+            
+                pthread_join(threads[t], NULL);
+            }
         }
-        
-    }
-    for(t = 0; t < SIZE; t++){
-        void *k;
-        pthread_join(threads[t], &k);
     }
 
-    // Writing to output TXT file
-    WriteMatrix(SIZE, result, argv[3]);
+    WriteMatrix(argv[3], result_mat);
 
     /* Last thing that main() should do */
     pthread_exit(NULL);
-    return 0;
 }
