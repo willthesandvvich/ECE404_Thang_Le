@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+
+
+import sys
+import subprocess
+
+
+# Helper functions
+def quit():
+    sys.exit()
+
+def exec_cmd(cmd):
+    print(cmd)
+    
+    p = subprocess.Popen(cmd, shell = True)
+    p.wait()
+    
+    if p.returncode:
+        print('Command failed!')
+        quit()
+    
+    return p.returncode
+
+def parse_objdump():
+    objdump = {}
+    
+    started = False
+    with open('disasm.S') as disasm:
+        for l in disasm:
+            if 'Disassembly of section .text' in l:
+                started = True
+            elif 'Disassembly of section' in l and started:
+                break
+            elif started and ':\t' in l:
+                addr = l[0:8]
+                inst = l[20:-1]
+                objdump[int(addr, 16)] = inst
+    
+    return objdump
+
+# Compile
+def compile(prefix, cached, files):
+    # Program base
+    base = 0x80000000 if cached else 0xa0000000
+    
+    # Fill the linker script
+    with open('boot/link.ld') as linker_template:
+        lines = linker_template.readlines()
+        with open('link.ld', 'w') as linker_script:
+            for l in lines:
+                if '__PROGRAM_BASE__' in l:
+                    l = l.replace('__PROGRAM_BASE__', hex(base))
+                linker_script.write(l)
+    
+    # Build the program
+    cmd = '{0}-gcc {1} {2} -Iinclude/ -T link.ld {3} -o compiled.elf'.format(
+        prefix,
+        '-static -march=mips32r2 -O2 -Wall -mno-abicalls -fno-pic',
+        '-nostdlib -nostartfiles -nodefaultlibs -fno-builtin',
+        ' '.join(files)
+    )
+    exec_cmd(cmd)
+    
+    # Generate disassembly
+    cmd = '{0}-objdump -D compiled.elf > disasm.S'.format(prefix)
+    exec_cmd(cmd)
+    
+    # Generate binary
+    cmd = '{0}-objcopy -O binary compiled.elf compiled.bin'.format(prefix)
+    exec_cmd(cmd)
+    
+    # Generate ram_reset_init.txt
+    cmd = 'bin/assemble {0}--init-registers boot/cfake.S'.format(
+        '--cached ' if cached else '')
+    exec_cmd(cmd)
+    
+    # Generate ram_program_init.txt
+    addr = base
+    objdump = parse_objdump()
+    
+    with open('compiled.bin', 'rb') as compiled:
+        with open('ram_program_init.txt', 'w') as ram_program:
+            bytes = compiled.read(4)
+            while bytes:
+                ram_program.write('{0} // [{1}] {2}\n'.format(
+                    bytes.hex(), hex(addr),
+                    objdump[addr] if addr in objdump else ''
+                ))
+                bytes = compiled.read(4)
+                addr += 4
+    
+    # Clean up
+    exec_cmd('rm -f link.ld')
+    exec_cmd('rm -f compiled.elf')
+    exec_cmd('rm -f compiled.bin')
+
+
+# Parse args
+cached = False
+toolchain = 'mips-linux-gnu'
+files = { 'boot/cstart.S' }
+
+i = 1
+argc = len(sys.argv)
+while i < argc:
+    argv = sys.argv[i]
+    if '--cached' == argv:
+        cached = True
+    elif '--uncached' == argv:
+        cached = False
+    elif '--toolchain' == argv and i + 1 < argc:
+        toolchain = sys.argv[i + 1]
+        i += 1
+    else:
+        files.add(argv)
+    i += 1
+
+
+compile(toolchain, cached, files)
+

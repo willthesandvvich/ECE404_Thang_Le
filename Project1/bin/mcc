@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# usage: bin/mcc file [--cached/--uncached]
+
+bin=$(dirname $0)
+flags=""
+while (( "$#" )); do
+    if [[ "${1:0:1}" == "-" ]]; then
+        flags="$flags $1"
+    else
+        file="$1"
+    fi
+    shift
+done
+${bin}/../cross/bin/clang -S --target=mips "$file" -I./include -o /dev/stdout \
+    | ${bin}/assemble --quiet --init-registers $flags
+

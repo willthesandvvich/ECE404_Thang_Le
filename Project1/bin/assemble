@@ -1,0 +1,1621 @@
+#!/usr/bin/env python3
+
+import re
+import sys
+import argparse
+import platform
+
+# ANSI color codes:
+
+ESC = chr(27)
+
+colors = [
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+    "default",
+]
+
+
+def supports_color():
+    return (hasattr(sys.stdout, "isatty") and
+            sys.stdout.isatty() and
+            platform.system() != "Windows")
+
+
+def escape(sequence):
+    return ESC + "[" + sequence
+
+
+def color(string, fg="default", bold=False):
+    fg_codes = {
+        "black": 30,
+        "red": 31,
+        "green": 32,
+        "yellow": 33,
+        "blue": 34,
+        "magenta": 35,
+        "cyan": 36,
+        "white": 37,
+        "default": 39,
+    }
+    code = str(fg_codes[fg])
+    if bold:
+        code = "1;" + code
+    if supports_color():
+        return escape("{}m".format(code)) + str(string) + escape("0m")
+    else:
+        return string
+
+# Assembler:
+
+file = None
+contents = {}
+label_defines = {}
+
+rtypes = {"add":    {"funct": 0x20, "ops": ("rd", "rs", "rt")},
+          "addu":   {"funct": 0x21, "ops": ("rd", "rs", "rt")},
+          "and":    {"funct": 0x24, "ops": ("rd", "rs", "rt")},
+          "jr":     {"funct": 0x08, "ops": ("rs",)},
+          "mfhi":   {"funct": 0x10, "ops": ("rd",)},
+          "mflo":   {"funct": 0x12, "ops": ("rd",)},
+          "mthi":   {"funct": 0x11, "ops": ("rs",)},
+          "mtlo":   {"funct": 0x13, "ops": ("rs",)},
+          "nor":    {"funct": 0x27, "ops": ("rd", "rs", "rt")},
+          "xor":    {"funct": 0x26, "ops": ("rd", "rs", "rt")},
+          "or":     {"funct": 0x25, "ops": ("rd", "rs", "rt")},
+          "sllv":   {"funct": 0x04, "ops": ("rd", "rt", "rs")},
+          "srlv":   {"funct": 0x06, "ops": ("rd", "rt", "rs")},
+          "srav":   {"funct": 0x07, "ops": ("rd", "rt", "rs")},
+          "slt":    {"funct": 0x2a, "ops": ("rd", "rs", "rt")},
+          "sltu":   {"funct": 0x2b, "ops": ("rd", "rs", "rt")},
+          "sub":    {"funct": 0x22, "ops": ("rd", "rs", "rt")},
+          "subu":   {"funct": 0x23, "ops": ("rd", "rs", "rt")},
+          "sll":    {"funct": 0x00, "ops": ("rd", "rt", "shamt")},
+          "srl":    {"funct": 0x02, "ops": ("rd", "rt", "shamt")},
+          "sra":    {"funct": 0x03, "ops": ("rd", "rt", "shamt")},
+          "div":    {"funct": 0x1a, "ops": ("rs", "rt")},
+          "divu":   {"funct": 0x1b, "ops": ("rs", "rt")},
+          "mult":   {"funct": 0x18, "ops": ("rs", "rt")},
+          "multu":  {"funct": 0x19, "ops": ("rs", "rt")},
+          "sync":   {"funct": 0x0f, "ops": ()},
+          "jr.hb":  {"funct": 0x08, "shamt": 0x10, "ops": ("rs",)},
+          "mul":    {"funct": 0x02, "opcode": 0x1c,
+                     "ops": ("rd", "rs", "rt")},
+          "seb":    {"funct": 0x20, "shamt": 0x10, "opcode": 0x1f,
+                     "ops": ("rd", "rt")},
+          "seh":    {"funct": 0x20, "shamt": 0x10, "opcode": 0x1f,
+                     "ops": ("rd", "rt")},
+          "rotr":   {"funct": 0x02, "rs": 0x01, "ops": ("rd", "rt", "shamt")},
+          "rotrv":  {"funct": 0x06, "shamt": 0x01, "ops": ("rd", "rt", "rs")},
+          "wsbh":   {"funct": 0x20, "opcode": 0x1f, "rs": 0x0, "shamt": 0x02,
+                     "ops": ("rd", "rt")},
+          "movn":   {"funct": 0x0b, "ops": ("rd", "rs", "rt")},
+          "movz":   {"funct": 0x0a, "ops": ("rd", "rs", "rt")},
+          "madd":   {"funct": 0x00, "opcode": 0x1c, "ops": ("rs", "rt")},
+          "maddu":  {"funct": 0x01, "opcode": 0x1c, "ops": ("rs", "rt")},
+          "msub":   {"funct": 0x04, "opcode": 0x1c, "ops": ("rs", "rt")},
+          "msubu":  {"funct": 0x05, "opcode": 0x1c, "ops": ("rs", "rt")}}
+jtypes = {"j":      0x02,
+          "jal":    0x03}
+b2type = {"blez":   0x06,
+          "bgtz":   0x07}
+mips2b = {"bgez":   0x01,
+          "bgezal": 0x11,
+          "bltz":   0x00,
+          "bltzal": 0x10}
+l2type = {"lui":    0x0f}
+l3type = {"lbu":    0x24,
+          "lhu":    0x25,
+          "lb":     0x20,
+          "lh":     0x21,
+          "lw":     0x23,
+          "sb":     0x28,
+          "sh":     0x29,
+          "sw":     0x2b,
+          "lwl":    0x22,
+          "lwr":    0x26,
+          "swl":    0x2a,
+          "swr":    0x2e,
+          "ll":     0x30,
+          "sc":     0x38,
+          "cache":  0x2f}
+b3type = {"beq":    0x04,
+          "bne":    0x05}
+i3type = {"addi":   0x08,
+          "addiu":  0x09,
+          "andi":   0x0c,
+          "ori":    0x0d,
+          "slti":   0x0a,
+          "sltiu":  0x0b,
+          "xori":   0x07}
+pseudo = ["blt",
+          "bgt",
+          "ble",
+          "beqz",
+          "neg",
+          "not",
+          "bge",
+          "li",
+          "la",
+          "move",
+          "b",
+          "bal",
+          "nop",
+          "bnez",
+          "div",
+          "divu",
+          "rem",
+          "negu",
+          "ulw",
+          "usw"]
+spec = {"jalr": lambda ops: rtype(funct=0x09,
+                                  rt=0,
+                                  rd=(param(ops[0]) if len(ops) == 2
+                                      else 31),
+                                  rs=(param(ops[1]) if len(ops) == 2
+                                      else param(ops[0])),
+                                  shamt=0),
+        "ext": lambda ops: rtype(opcode=0x1f,
+                                 rt=param(ops[0]),
+                                 rs=param(ops[1]),
+                                 shamt=param(ops[2]),
+                                 rd=(param(ops[3])-1),
+                                 funct=0),
+        "mfc0": lambda ops: rtype(opcode=0x10,
+                                  rt=param(ops[0]),
+                                  rd=param(ops[1]),
+                                  funct=((param(ops[2]) & 7)
+                                         if len(ops) == 3 else 0),
+                                  rs=0),
+        "mtc0": lambda ops: rtype(opcode=0x10,
+                                  rt=param(ops[0]),
+                                  rd=param(ops[1]),
+                                  funct=((param(ops[2]) & 7)
+                                         if len(ops) == 3 else 0),
+                                  rs=4),
+        "ins": lambda ops: rtype(opcode=0x1f,
+                                 rt=param(ops[0]),
+                                 rs=param(ops[1]),
+                                 shamt=param(ops[2]),
+                                 rd=param(ops[3])-1,
+                                 funct=4),
+        "clo": lambda ops: rtype(opcode=0x1c,
+                                 rt=param(ops[0]),
+                                 rd=param(ops[0]),
+                                 rs=param(ops[1]),
+                                 funct=0x21),
+        "clz": lambda ops: rtype(opcode=0x1c,
+                                 rt=param(ops[0]),
+                                 rd=param(ops[0]),
+                                 rs=param(ops[1]),
+                                 funct=0x20)}
+
+
+def list_supported_instructions():
+    """
+    Print supported instructions to the screen in a columnated list
+    """
+    supported = sorted(list(set(list(rtypes) + list(jtypes) + list(b2type) +
+                                list(mips2b) + list(l2type) + list(l3type) +
+                                list(b3type) + list(i3type) + pseudo +
+                                list(spec))))
+    if len(supported) % 5 != 0:
+        supported.extend([""] * (5 - (len(supported) % 5)))
+    chunked = []
+    for i in range(0, len(supported), len(supported) // 5):
+        chunked.append(supported[i:i + len(supported) // 5])
+    for chunk in zip(*chunked):
+        print(("{:<9}" * 5).format(*chunk))
+
+
+def parse_instruction_line(line, label, statements, sets, lineno=None):
+    """
+    Accepts a +line+ of the source program, updating the list of +statements+
+    according to the instruction/pseudoinstruction present.
+    """
+    opcode = line.split()[0]
+    if opcode in pseudo:
+        for i, instruction in enumerate(sub_pseudoinstruction(line,
+                                                              sets["noat"],
+                                                              lineno=lineno)):
+            annotated_line = "{} # (pseudoinstruction of {})".format(
+                instruction, " ".join(line.split()))
+            if i == 0:
+                if label:
+                    annotated_line = label + ": " + annotated_line
+                stmt = ("instruction", label, parse_instruction(instruction,
+                                                                lineno=lineno),
+                        annotated_line, lineno)
+            else:
+                stmt = ("instruction", None, parse_instruction(instruction,
+                                                               lineno=lineno),
+                        annotated_line, lineno)
+            statements.append(stmt)
+    else:
+        # Instruction
+        stmt = ("instruction", label, parse_instruction(line, lineno=lineno),
+                (label + ": " if label else "") + " ".join(line.split()),
+                lineno)
+        statements.append(stmt)
+
+
+def parse(file):
+    """
+    Parse a MIPS assembly program.
+
+    Inputs:
+        - file: a file object
+    Returns:
+        - List of statements
+    """
+    statements = []
+    labeler = re.compile(r"\s*((?P<label>\S+):)?\s*(?P<instruction>.*)")
+    last_label = None
+    sets = {"noat": False}
+    for lineno, line in enumerate(file):
+        # Line numbers are 1 indexed
+        lineno += 1
+        # Check for and strip any comments
+        if "#" in line:
+            line = line[:line.index("#")]
+        # Clear any whitespace on the leading or trailing end
+        line = line.strip()
+        if line:
+            match = labeler.match(line)
+            label = match.group("label")
+            if (label is None) and (last_label is not None):
+                label = last_label
+                line = label + ": " + line
+            rest = match.group("instruction")
+            if rest:
+                if rest[0] == ".":
+                    # Directive
+                    if supported_directive(rest):
+                        stmt = ("directive", label,
+                                parse_directive(rest, sets=sets,
+                                                lineno=lineno),
+                                None, lineno)
+                        statements.append(stmt)
+                        last_label = None
+                    else:
+                        directive_name, _ = directive_data(rest)
+                        if directive_name == "comm":
+                            # Super-special case -- this adds a label
+                            name, size = parse_comm(rest, lineno=lineno)
+                            stmt = ("directive", name, ("byte", [0]*size),
+                                    None, lineno)
+                            statements.append(stmt)
+                            last_label = None
+                        else:
+                            warn("unsupported directive (ignoring):",
+                                 directive_name,
+                                 lineno=lineno)
+                else:
+                    parse_instruction_line(rest, label, statements,
+                                           sets, lineno=lineno)
+                    last_label = None
+            else:
+                last_label = label
+    return statements
+
+
+class rtype:
+
+    def __init__(self, funct, rs=0, rt=0, rd=0, shamt=0, opcode=0):
+        self.funct = funct
+        self.rs = rs
+        self.rt = rt
+        self.rd = rd
+        self.shamt = shamt
+        self.opcode = opcode
+
+    def encode(self):
+        value = (self.opcode << 26) | (self.rs << 21) | (self.rt << 16) | \
+                (self.rd << 11) | (self.shamt << 6) | self.funct
+        return "{:08X}".format(value)
+
+    def has_delay_slot(self):
+        # jr/jr.hb & jalr
+        return self.funct in (0x08, 0x09)
+
+    def resolve_immediate(self, labels, PC, lineno=None):
+        pass
+
+    def __repr__(self):
+        return "<rtype funct={}, rs={}, rt={}, rd={}, shamt={}>".format(
+            self.funct, self.rs, self.rt, self.rd, self.shamt)
+
+
+class itype:
+
+    def __init__(self, opcode, rs=0, rt=0, imm=0):
+        self.opcode = opcode
+        self.rs = rs
+        self.rt = rt
+        self.imm = imm
+
+    def resolve_immediate(self, labels, PC, lineno=None):
+        if type(self.imm) == str:
+            # String -- need to resolve label
+            self.imm = resolve_label(labels, self.imm, PC, lineno=lineno)
+        if not self.valid_immediate():
+            error("immediate too large", lineno=lineno)
+
+    def encode(self):
+        value = (self.opcode << 26) | (self.rs << 21) | \
+                (self.rt << 16) | (self.imm & 0xffff)
+        return "{:08X}".format(value)
+
+    def has_delay_slot(self):
+        branches = list(b3type.values()) + list(mips2b.values()) + \
+                   list(b2type.values())
+        return self.opcode in branches
+
+    def valid_immediate(self):
+        # Ensure that no information is lost when it is converted to a 16 bit value
+        return (self.imm & 0xffff0000) in (0xffff0000, 0x00000000)
+
+    def __repr__(self):
+        return "<itype opcode={}, rs={}, rt={}, imm={}>".format(self.opcode,
+                                                                self.rs,
+                                                                self.rt,
+                                                                self.imm)
+
+
+class jtype:
+
+    def __init__(self, opcode, imm):
+        self.opcode = opcode
+        self.imm = imm
+
+    def resolve_immediate(self, labels, PC, lineno=None):
+        if type(self.imm) == str:
+            # Need to resolve label
+            self.imm = resolve_label(labels, self.imm, PC, lineno=lineno)
+        if not self.valid_immediate(PC):
+            error("immediate too large", lineno=lineno)
+
+    def encode(self, lineno=None):
+        value = (self.opcode << 26) | ((self.imm >> 2) & 0x3ffffff)
+        return "{:08X}".format(value)
+
+    def __repr__(self):
+        return "<jtype opcode={}, imm={}>".format(self.opcode,
+                                                  self.imm)
+
+    def has_delay_slot(self):
+        return True
+
+    def valid_immediate(self, PC):
+        # Ensure that no information is lost when converted to a 26 bit value
+        return (self.imm & 0x0fffffff) | (PC & 0xf0000000) == self.imm
+
+
+def directive_data(directive):
+    """
+    Given a +directive+ as it appears in the source program,
+    determine its name and arguments.
+    """
+    match = re.match(r"\.(?P<dir>\w+)\s*(?P<operands>.*)", directive)
+    directive_name = match.group("dir")
+    operands = [op.strip() for op in match.group("operands").split(",")]
+    return directive_name, operands
+
+
+def supported_directive(directive):
+    """
+    Returns True if the +directive+ is supported by the assembler, False
+    otherwise.
+    """
+    directive_name, _ = directive_data(directive)
+    return directive_name in ("weak", "data", "byte", "half", "word",
+                              "asciiz", "ascii", "align", "label",
+                              "2byte", "4byte", "section", "p2align",
+                              "excvector", "set", "globl", "space")
+
+
+def parse_comm(directive, lineno=None):
+    """
+    Parse a .comm directive, returning the name and size
+    """
+    _, ops = directive_data(directive)
+    name = ops[0]
+    try:
+        size = int(ops[1], 0)
+    except ValueError:
+        error("invalid size:", ops[1], lineno=lineno)
+    return name, size
+
+
+def parse_directive(directive, sets={}, lineno=None):
+    """
+    Parse a directive, returning a tuple of the
+    (directive name, directive arg(s))
+    """
+    directive_name, operands = directive_data(directive)
+    # weak label: allows the label corresponding to this directive to be
+    # overridden if another label of the same name exists in the program.
+    if directive_name == "weak":
+        return ("weak",)
+    # start of the data segment
+    elif directive_name == "data":
+        return ("data",)
+    elif directive_name == "section":
+        if operands[0] == ".rodata":
+            return ("data",)
+        else:
+            return ("section", operands)
+    # align memory in data segment
+    elif directive_name in ("align", "p2align"):
+        return ("align", 2**int(operands[0]))
+    # add byte(s) to data segment
+    elif directive_name == "byte":
+        processed_ops = []
+        for op in operands:
+            try:
+                op = int(op, 0)
+                if op > 255 or op < -128:
+                    error("invalid byte:", op, lineno=lineno)
+            except ValueError:
+                # It is a string (with a single character)
+                if len(op) > 3:
+                    error("invalid byte:", op, lineno=lineno)
+                op = ord(op[1:-1])
+            processed_ops.append(op)
+        return ("byte", processed_ops)
+    # add halfword(s) to data segment
+    elif directive_name in ["half", "2byte"]:
+        # Only support hex values
+        processed_ops = []
+        for op in operands:
+            op = int(op, 0)
+            if op > (2**16-1) or op < -2**15:
+                error("invalid halfword:", op, lineno=lineno)
+            processed_ops.append(op)
+        return ("half", processed_ops)
+    # add word(s) to data segment
+    elif directive_name in ["word", "4byte"]:
+        # Only support hex values
+        processed_ops = []
+        for op in operands:
+            try:
+                op = int(op, 0)
+                if op > (2**32-1) or op < -2**31:
+                    error("invalid word:", op, lineno=lineno)
+            except ValueError:
+                # It is a label of the form "(label)"
+                op = op[1:-1]
+            processed_ops.append(op)
+        return ("word", processed_ops)
+    # add null-terminated string to data segment
+    elif directive_name == "asciiz":
+        # Same as a byte sequence
+        return ("byte", process_ascii(operands, lineno, name="asciiz") + [0])
+    # add string without null terminator to data segment
+    elif directive_name == "ascii":
+        # Same as a byte sequence
+        return ("byte", process_ascii(operands, lineno))
+    # Create space of n bytes
+    # i.e. ".space 100" creates a space of 100 bytes
+    elif directive_name == "space":
+        try:
+            return ("byte", [0] * int(operands[0], 0))
+        except:
+            error(".space expects an integer argument", lineno=lineno)
+    # Create a comment in output
+    elif directive_name == "label":
+        # For internal use only
+        return ("label", operands[0])
+    # Global declaration
+    elif directive_name == "globl":
+        # Create a label
+        return ("label", "global: " + operands[0])
+    # Change the PC to the specified location
+    elif directive_name == "excvector":
+        # For internal use only
+        return ("excvector", int(operands[0], 0))
+    elif directive_name == "set":
+        if operands[0] == "at":
+            sets["noat"] = False
+        elif operands[0] == "noat":
+            sets["noat"] = True
+        return ("set", operands[0])
+
+
+def process_ascii(operands, lineno, name="ascii"):
+    # Only support one argument
+    if len(operands) != 1:
+        error(".{} accepts one value ({} provided)".format(
+            name, len(operands)), lineno=lineno)
+    # Strip the quotes
+    match = re.match(
+        r"\"(?P<quote>(?:[^\"\\]|\\.)*)\"",
+        operands[0])
+    if match is None:
+        error("invalid quoted string", lineno=lineno)
+    quotes = match.group("quote")
+    ascii_str = quotes.replace("\\\"", "\"")
+    processed_ops = [ord(chr) for chr in ascii_str]
+    return processed_ops
+
+
+class RequiresAt(Exception):
+    pass
+
+
+def sub_pseudoinstruction(psinst, noat=False, lineno=None):
+    """
+    Converts a pseudoinstruction into the stream of actual instructions
+    that it represents.
+    """
+    try:
+        match = re.match(r"(?P<opcode>\w+)\s*(?P<operands>.*)", psinst)
+        opcode = match.group("opcode")
+        operands = [op.strip() for op in match.group("operands").split(",")]
+        expected_operands = 0
+        if opcode == "blt":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 3
+            yield "slt $at, {}, {}".format(operands[0], operands[1])
+            yield "bne $at, $0, {}".format(operands[2])
+        elif opcode == "bgt":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 3
+            yield "slt $at, {}, {}".format(operands[1], operands[0])
+            yield "bne $at, $0, {}".format(operands[2])
+        elif opcode == "ble":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 3
+            yield "slt $at, {}, {}".format(operands[1], operands[0])
+            yield "beq $at, $0, {}".format(operands[2])
+        elif opcode == "neg":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 2
+            yield "nor $at, {}, $0".format(operands[1])
+            yield "addi {}, $at, 1".format(operands[0])
+        elif opcode == "not":
+            expected_operands = 2
+            yield "nor {}, {}, $0".format(operands[0], operands[1])
+        elif opcode == "bge":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 3
+            yield "slt $at, {}, {}".format(operands[0], operands[1])
+            yield "beq $at, $0, {}".format(operands[2])
+        elif opcode == "beqz":
+            expected_operands = 2
+            yield "beq $0, {}, {}".format(operands[0], operands[1])
+        elif opcode == "nop":
+            expected_operands = 0
+            yield "sll $0, $0, 0"
+        elif opcode == "move":
+            expected_operands = 2
+            yield "addiu {}, {}, 0".format(operands[0], operands[1])
+        elif opcode == "b":
+            expected_operands = 1
+            yield "bgez $0, {}".format(operands[0])
+        elif opcode == "bal":
+            expected_operands = 1
+            yield "bgezal $0, {}".format(operands[0])
+        elif opcode in ("li", "la"):
+            expected_operands = 2
+            try:
+                imm = int(operands[1], 0)
+                upper = (imm >> 16) & 0xffff
+                lower = imm & 0xffff
+            except:
+                upper = "%hi({})".format(operands[1])
+                lower = "%lo({})".format(operands[1])
+            if upper == 0:
+                yield "ori {}, $0, {}".format(operands[0], lower)
+            else:
+                yield "lui {}, {}".format(operands[0], upper)
+                if lower != 0:
+                    yield "ori {}, {}, {}".format(operands[0], operands[0],
+                                                  lower)
+        elif opcode == "bnez":
+            expected_operands = 2
+            yield "bne {}, $0, {}".format(operands[0], operands[1])
+        elif opcode == "div":
+            if len(operands) == 2:
+                # not a pseudoinstruction
+                yield psinst
+            else:
+                expected_operands = 3
+                yield "div {}, {}".format(operands[1], operands[2])
+                yield "mflo {}".format(operands[0])
+        elif opcode == "divu":
+            if len(operands) == 2:
+                # not a pseudoinstruction
+                yield psinst
+            else:
+                expected_operands = 3
+                yield "divu {}, {}".format(operands[1], operands[2])
+                yield "mflo {}".format(operands[0])
+        elif opcode == "rem":
+            expected_operands = 3
+            yield "div {}, {}".format(operands[1], operands[2])
+            yield "mfhi {}".format(operands[0])
+        elif opcode == "negu":
+            if noat:
+                raise RequiresAt()
+            expected_operands = 2
+            yield "nor $at, {}, $0".format(operands[1])
+            yield "addiu {}, $at, 1".format(operands[0])
+        elif opcode == "ulw":
+            expected_operands = 2
+            try:
+                match = re.match(r"(?P<imm>.*)\((?P<reg>.*)\)", operands[1])
+                imm = match.group("imm")
+                reg = match.group("reg")
+                imm = int(imm, 0)
+                imm3 = imm + 3
+            except AttributeError:
+                error("invalid argument:", operands[1],
+                      "(expected format offset(register))", lineno=lineno)
+            except:
+                error("cannot use label in pseudoinstruction:", psinst,
+                      lineno=lineno)
+            yield "lwl {}, {}({})".format(operands[0], imm, reg)
+            yield "lwr {}, {}({})".format(operands[0], imm3, reg)
+        elif opcode == "usw":
+            expected_operands = 2
+            try:
+                match = re.match(r"(?P<imm>.*)\((?P<reg>.*)\)", operands[1])
+                imm = match.group("imm")
+                reg = match.group("reg")
+                imm = int(imm, 0)
+                imm3 = imm + 3
+            except AttributeError:
+                error("invalid argument:", operands[1], lineno=lineno)
+            except:
+                error("cannot use label in pseudoinstruction:", psinst,
+                      lineno=lineno)
+            yield "swl {}, {}({})".format(operands[0], imm, reg)
+            yield "swr {}, {}({})".format(operands[0], imm3, reg)
+        else:
+            error("unsupported instruction mnemonic:", opcode, lineno=lineno)
+    except IndexError:
+        error("wrong number of arguments:",
+              "(expected {}, got {})".format(expected_operands, len(operands)),
+              lineno=lineno)
+    except RequiresAt:
+        error("pseudoinstruction requires use of $at, but `noat' was set",
+              lineno=lineno)
+    except SystemExit:
+        raise
+    except:
+        error("invalid instruction:", psinst, lineno=lineno)
+
+
+def parse_address(arg, lineno=None):
+    """
+    Parse an address
+
+    Example:
+        parse_address("0x05($5)") => (0x05, "$5")
+        parse_address("%lo(FOO)($5)") => ("%lo(FOO)", "$5")
+    """
+    try:
+        op_match = re.match(
+            r"(?P<imm>(\%\w+\(\S+\)|([^\(\%]+)))\((?P<register>[^\)]*)\)$",
+            arg)
+        imm = op_match.group("imm")
+        reg = op_match.group("register")
+    except AttributeError:
+        error("invalid argument:", arg, "(expected format offset(register))",
+              lineno=lineno)
+    return parse_immediate(imm), reg
+
+
+def parse_immediate(imm, *, extend_with=None):
+    """
+    Parse an immediate, conveting to an integer if possible
+
+    Example:
+        parse_immediate("0x15") => 0x15
+        parse_immediate("FOO") => "FOO"
+        parse_immediate("FOO", extend_with="offset") => "FOO:offset"
+    """
+    try:
+        imm = int(imm, 0)
+    except:
+        if extend_with:
+            imm = imm + ":" + extend_with
+    return imm
+
+
+def verify_arity(line, expected, actual, lineno=None):
+    if expected != actual:
+        error("wrong number of arguments",
+              "(expected {}, got {})".format(
+                  expected,
+                  actual),
+              lineno=lineno)
+
+
+def parse_instruction(line, lineno=None):
+    """
+    Parse an individual instruction.
+
+    Example:
+        parse_instruction("jalr $ra")
+            => <rtype funct=9, rs=31, rt=0, rd=31, shamt=0>
+        parse_instruction("addi $5, $a0, 11")
+            => <itype opcode=8, rs=4, rt=5, imm=11>
+        parse_instruction("j label")
+            => <jtype opcode=2 imm="label">
+    """
+    try:
+        match = re.match(r"(?P<opcode>[\w\.]+)\s*(?P<operands>.*)", line)
+        opcode = match.group("opcode")
+        operands = [op.strip()
+                    for op in match.group("operands").split(",")]
+        if opcode in rtypes:
+            # R-type
+            verify_arity(line, len(rtypes[opcode]["ops"]),
+                         len(operands), lineno=lineno)
+            ops = dict(zip(rtypes[opcode]["ops"],
+                           [param(operand) for operand in operands]))
+            fields = dict(rtypes[opcode])
+            del fields["ops"]
+            return rtype(**ops, **fields)
+        elif opcode in jtypes:
+            # J-type
+            verify_arity(line, 1, len(operands), lineno=lineno)
+            imm = parse_immediate(operands[0])
+            return jtype(opcode=int(jtypes[opcode]), imm=imm)
+        elif opcode in b2type:
+            # branch w/ 2 ops
+            # branch labels are offsets
+            verify_arity(line, 2, len(operands), lineno=lineno)
+            imm = parse_immediate(operands[1], extend_with="offset")
+            return itype(opcode=int(b2type[opcode]),
+                         rs=param(operands[0]), imm=imm)
+        elif opcode in l2type:
+            # i.e. lui
+            verify_arity(line, 2, len(operands), lineno=lineno)
+            imm = parse_immediate(operands[1])
+            return itype(opcode=int(l2type[opcode]),
+                         rt=param(operands[0]), imm=imm)
+        elif opcode in l3type:
+            # i.e. loads and stores
+            verify_arity(line, 2, len(operands), lineno=lineno)
+            rt = param(operands[0])
+            imm, rs = parse_address(operands[1], lineno=lineno)
+            return itype(opcode=int(l3type[opcode]), rt=rt,
+                         rs=param(rs), imm=imm)
+        elif opcode in i3type:
+            # I-Type w/ 3 ops
+            verify_arity(line, 3, len(operands), lineno=lineno)
+            imm = parse_immediate(operands[2])
+            return itype(opcode=int(i3type[opcode]), rt=param(operands[0]),
+                         rs=param(operands[1]), imm=imm)
+        elif opcode in b3type:
+            # Branch w/ 3 ops
+            # branch labels are offsets
+            verify_arity(line, 3, len(operands), lineno=lineno)
+            imm = parse_immediate(operands[2], extend_with="offset")
+            return itype(opcode=int(b3type[opcode]), rt=param(operands[0]),
+                         rs=param(operands[1]), imm=imm)
+        elif opcode in mips2b:
+            verify_arity(line, 2, len(operands), lineno=lineno)
+            rt = mips2b[opcode]
+            rs = param(operands[0])
+            # branch labels are offsets
+            imm = parse_immediate(operands[1], extend_with="offset")
+            return itype(opcode=1, rt=rt, rs=rs, imm=imm)
+        elif opcode in spec:
+            return spec[opcode](operands)
+        else:
+            # Unrecognized
+            error("invalid instruction mnemonic:", opcode, lineno=lineno)
+    except SystemExit:
+        raise
+    except:
+        error("invalid instruction", lineno=lineno)
+
+
+def param(operand):
+    """
+    Converts a register/immediate value into an integer for the register
+    specifier or integer representation of the immediate value.
+    """
+    registers = {"$zero":   "$0",
+                 "$at":     "$1",
+                 "$v0":     "$2",
+                 "$v1":     "$3",
+                 "$a0":     "$4",
+                 "$a1":     "$5",
+                 "$a2":     "$6",
+                 "$a3":     "$7",
+                 "$t0":     "$8",
+                 "$t1":     "$9",
+                 "$t2":     "$10",
+                 "$t3":     "$11",
+                 "$t4":     "$12",
+                 "$t5":     "$13",
+                 "$t6":     "$14",
+                 "$t7":     "$15",
+                 "$s0":     "$16",
+                 "$s1":     "$17",
+                 "$s2":     "$18",
+                 "$s3":     "$19",
+                 "$s4":     "$20",
+                 "$s5":     "$21",
+                 "$s6":     "$22",
+                 "$s7":     "$23",
+                 "$t8":     "$24",
+                 "$t9":     "$25",
+                 "$k0":     "$26",
+                 "$k1":     "$27",
+                 "$gp":     "$28",
+                 "$sp":     "$29",
+                 "$fp":     "$30",
+                 "$ra":     "$31"}
+    if operand[0] != "$":
+        return int(operand, 0)
+    reg = registers.get(operand, operand)
+    return int(reg[1:])
+
+
+def add_label(labels, label, value, prev, lineno=None):
+    global file
+    if label:
+        if label in labels or label in prev:
+            previous_definition = label_defines.get(label, ("<boot>", None))
+            if file == "<boot>" and previous_definition != "<boot>":
+                # Since we assemble the boot code second, the actual
+                # error was in the program code -- swap the error
+                # need to change which is the active file
+                current_file = file
+                file = previous_definition[0]
+                error_message("label already exists:", label,
+                              lineno=previous_definition[1])
+                note("previously defined in",
+                     "{}:{}".format(current_file, lineno),
+                     lineno=previous_definition[1])
+                try:
+                    print(contents[current_file][lineno-1].strip())
+                except:
+                    pass
+            else:
+                error_message("label already exists:", label, lineno=lineno)
+                if label in label_defines:
+                    note("previously defined in",
+                         "{}:{}".format(*label_defines[label]),
+                         lineno=lineno)
+                    try:
+                        prev_file = previous_definition[0]
+                        prev_line = previous_definition[1]
+                        print(contents[prev_file][prev_line-1].strip())
+                    except:
+                        pass
+            sys.exit(1)
+        labels[label] = value
+        if lineno:
+            label_defines[label] = (file, lineno)
+
+
+class address:
+    """
+    Captures address advancing logic.
+    """
+    def __init__(self, addr):
+        self.addr = addr
+        self.data = None
+    def advance(self, statement):
+        """
+        Advance the PC based on the passed +statement+
+        """
+        curaddr = self.addr
+        lineno=statement[4]
+        if statement[0] == "directive":
+            directive_name = statement[2][0]
+            if directive_name == "data":
+                self.data = data_segment(self.addr)
+                self.addr = self.data.addr
+            elif directive_name == "byte":
+                if self.data is None:
+                    self.data = data_segment(self.addr)
+                    self.addr = self.data.addr
+                    curaddr = self.addr
+                directive_args = statement[2][1]
+                self.addr = self.data.add_bytes(directive_args)
+            elif directive_name == "half":
+                if self.data is None:
+                    self.data = data_segment(self.addr)
+                    self.addr = self.data.addr
+                    curaddr = self.addr
+                directive_args = statement[2][1]
+                self.addr = self.data.add_halfwords(directive_args)
+            elif directive_name == "word":
+                if self.data is None:
+                    self.data = data_segment(self.addr)
+                    self.addr = self.data.addr
+                    curaddr = self.addr
+                directive_args = statement[2][1]
+                self.addr = self.data.add_words(directive_args)
+            elif directive_name == "align":
+                directive_args = statement[2][1]
+                if self.data is None:
+                    if directive_args < 4:
+                        error("instructions must be word-aligned",
+                              lineno=lineno)
+                    self.addr += align(self.addr, directive_args)
+                else:
+                    self.addr = self.data.align(directive_args)
+            elif directive_name == "excvector":
+                # Update the address to the one specified by excvector
+                self.addr = (self.addr & 0xfffff000) | (statement[2][1] & 0xfff)
+        else:
+            # Instruction
+            self.addr += 4
+        return curaddr, self.addr
+
+
+def resolve_labels(base, statements, prev={}):
+    """
+    Returns all defined labels in the program.
+    +base+ is the starting address of the program.
+    +statements+ is a list of parsed instructions/directives.
+    +prev+ (optional) is a dictionary of previously determined
+    label addresses.
+    """
+    labels = {}
+    weak_labels = {}
+    PC = address(base)
+    addr = PC.addr
+    for statement in statements:
+        lineno = statement[4]
+        curaddr, addr = PC.advance(statement)
+        if statement[0] == "directive":
+            directive_name = statement[2][0]
+            label = statement[1]
+            if directive_name == "weak":
+                weak_labels[label] = curaddr
+            else:
+                add_label(labels, label, curaddr, prev, lineno=lineno)
+        else:
+            # Instruction
+            label = statement[1]
+            add_label(labels, label, curaddr, prev, lineno=lineno)
+    return {**weak_labels, **prev, **labels}
+
+
+# current is address of this instruction
+def resolve_label(labels, label, current, lineno=None):
+    """
+    Converts the passed +label+ into an address, taking into account
+    the list of all possible +labels+ and the address at the +current+
+    instruction/directive.
+    """
+    if label[0] == "%":
+        # %hi(label) or %lo(label)
+        match = re.match(r"\%(?P<kind>\w+)\((?P<label>\S+)\)", label)
+        kind = match.group("kind")
+        label = match.group("label")
+        if kind == "hi":
+            label = label + ":upper"
+        elif kind == "lo":
+            label = label + ":lower"
+        else:
+            error("unknown operator:", "%{}".format(kind), lineno=lineno)
+    try:
+        if ":" in label:
+            # Special (internal) label
+            label, suffix = label.split(":")
+            if suffix == "offset":
+                # Instruction offset from PC+4 (next instruction) to label
+                return (labels[label] - (current+4))//4
+            elif suffix == "upper":
+                # Upper 16 bits of label
+                return (labels[label] >> 16) & 0xffff
+            elif suffix == "lower":
+                return (labels[label] & 0xffff)
+            else:
+                error("unknown label:", label, lineno=lineno)
+        else:
+            return labels[label]
+    except KeyError:
+        error("unknown label:", label, lineno=lineno)
+
+
+class data_segment:
+    """
+    Represents the .data section of the program
+    """
+
+    def __init__(self, addr):
+        self.base = addr
+        self.addr = addr
+        self.data = []
+        # Ensures that data does not share a cache line with instructions
+        # Also ensures that data is word-aligned
+        self.align(16)
+
+    def add_bytes(self, bytes):
+        """
+        Place some +bytes+ (list) into the data segment.
+        """
+        self.data.extend(bytes)
+        self.addr += len(bytes)
+        return self.addr
+
+    def add_halfwords(self, halfwords):
+        """
+        Place some +halfwords+ (list) into the data segment.
+        Aligns the halfwords in memory.
+        """
+        self.align(2)
+        bytes = []
+        for hw in halfwords:
+            upper = (hw >> 8) & 0xff
+            lower = hw & 0xff
+            self.data.append(upper)
+            self.data.append(lower)
+            self.addr += 2
+        return self.addr
+
+    def _process_word(self, word):
+        upper = (word >> 24) & 0xff
+        umid = (word >> 16) & 0xff
+        lmid = (word >> 8) & 0xff
+        lower = word & 0xff
+        return [upper, umid, lmid, lower]
+
+    def add_words(self, words):
+        """
+        Place soem +words+ (list) into the data segment.
+        Aligns the words in memory.
+        Words may be integers or strings (labels).
+        """
+        self.align(4)
+        for word in words:
+            if type(word) == str:
+                # Label
+                self.data.append(word)
+            else:
+                self.data.extend(self._process_word(word))
+            self.addr += 4
+        return self.addr
+
+    def align(self, amount):
+        """
+        Aligns the data segment to hold a piece of data +amount+ bytes in size
+        """
+        alignment_bytes = align(self.addr, amount)
+        self.data.extend([0] * alignment_bytes)
+        self.addr += alignment_bytes
+        return self.addr
+
+    def encode(self, labels):
+        """
+        Returns the binary representation of the data segment.
+        """
+        resolved_data = []
+        PC = self.base
+        inv_labels = {}
+        for k, v in labels.items():
+            inv = inv_labels.get(v, [])
+            inv.append(k)
+            inv_labels[v] = inv
+        # First, resolve labels
+        for d in self.data:
+            if type(d) == str:
+                # Label: MUST BE A WORD
+                # the address should have no effect
+                value = resolve_label(labels, d, self.addr)
+                resolved_data.extend(self._process_word(value))
+            else:
+                resolved_data.append(d)
+        self.data = resolved_data
+        encoded_data = ["// Data"]
+        # Take word-long chunks of data
+        for i in range(0, len(self.data), 4):
+            names = inv_labels.get(PC)
+            chunk = resolved_data[i:i+4]
+            enc = "{:02X}{:02X}{:02X}{:02X} // [0x{:08x}]".format(*chunk, PC)
+            if names:
+                encoded_data.append(enc + " " + ", ".join(names))
+            else:
+                encoded_data.append(enc)
+            PC += 4
+        return "\n".join(encoded_data)
+
+
+def align(addr, amount):
+    return (amount - (addr % amount)) % amount
+
+
+def check_expanded_delay_slot(statements):
+    """
+    Check to see that no pseudoinstructions expanded into multiple
+    instructions within a branch delay slot.
+    """
+    last_line = 0
+    in_delay = False
+    last_delay = False
+    last_statement = None
+    for statement in statements:
+        if statement[0] == "instruction":
+            current_line = statement[4]
+            # Check to see if we are the second part of a pseudoinstruction
+            # in a branch delay slot:
+            # This means that the last instruction (pseudo #1) was in the
+            # delay slot, and we (pseudo #2) are not.
+            if last_delay and (last_line == current_line):
+                error_message("multi-instruction pseudoinstruction "
+                              "in branch delay slot",
+                              lineno=current_line)
+                note("pseudoinstruction expands to\n{}\n{}".format(
+                        last_statement[3],
+                        statement[3]),
+                     lineno=current_line)
+                sys.exit(1)
+            last_line = current_line
+            last_statement = statement
+            if statement[2].has_delay_slot():
+                in_delay = True
+                # ISA forbids branches in branch delay slots
+                last_delay = False
+            elif in_delay:
+                in_delay = False
+                last_delay = True
+            else:
+                last_delay = False
+
+
+def check_branch_in_delay_slot(statements):
+    """
+    Check to see that no branches/jumps have been placed in branch
+    delay slots.
+    """
+    in_delay = False
+    delay_slot = None
+    for statement in statements:
+        if statement[0] == "instruction":
+            if in_delay and statement[2].has_delay_slot():
+                current_line = statement[4]
+                error_message("branch/jump in branch delay slot",
+                              lineno=current_line)
+                note("first branch/jump here:\n{}".format(
+                        contents[file][delay_slot[4]-1].strip()),
+                     lineno=delay_slot[4])
+                sys.exit(1)
+            if statement[2].has_delay_slot():
+                delay_slot = statement
+                in_delay = True
+            else:
+                in_delay = False
+
+
+def check_backwards_excvector(statements):
+    """
+    Ensure that any exception vector codes do not overlap with program
+    code.
+    """
+    # Start @ 0 (we only look at the lower bounds anyway)
+    PC = address(0)
+    addr = PC.addr
+    for statement in statements:
+        if statement[0] == "directive":
+            directive_name = statement[2][0]
+            if directive_name == "excvector":
+                # Update the address to the one specified by excvector
+                new_addr = (addr & 0xfffff000) | (statement[2][1] & 0xfff)
+                if new_addr <= addr:
+                    error("exception vector overlaps with program code",
+                          lineno=statement[4])
+        _, addr = PC.advance(statement)
+
+
+def resolve_immediates(base, statements, labels):
+    PC = address(base)
+    for statement in statements:
+        lineno = statement[4]
+        if statement[0] == "instruction":
+            statement[2].resolve_immediate(labels, PC.addr, lineno)
+        PC.advance(statement)
+
+
+def run_passes(statements):
+    """
+    Evaluate each statement, and modify/generate warnings if there is
+    a problem.
+    """
+    # Check for branches in branch delay slots
+    check_branch_in_delay_slot(statements)
+    # Check for expanded pseudoinstructions in branch delay slots
+    check_expanded_delay_slot(statements)
+    # Check for a excvector that moves backwards
+    check_backwards_excvector(statements)
+    return statements
+
+def run_postpasses(base, statements, labels):
+    """
+    Evaluate each statement and generate warnings/errors if there is a
+    problem. These passes may not modify the program.
+    """
+    # Convert labels into immediate values
+    resolve_immediates(base, statements, labels)
+
+def assemble_file(filename, base, in_file, out_file, weak={}, prev={}):
+    """
+    Assemble a file, with file object (or list of strings) +in_file+,
+    to file object +out_file+. Accepts static weak symbols as a dictionary
+    in +weak+, and labels from previously assembled files +prev+.
+    """
+    # Making global for error handling context
+    global file
+    file = filename
+    contents[file] = list(in_file)
+
+    data = None
+    statements = parse(contents[file])
+    statements = run_passes(statements)
+    labels = resolve_labels(base, statements, prev=prev)
+    inv_labels = {}
+    for k, v in labels.items():
+        inv = inv_labels.get(v, [])
+        inv.append(k)
+        inv_labels[v] = inv
+    # Fold in the extra-weak labels
+    labels = {**weak, **labels}
+    run_postpasses(base, statements, labels)
+    addr = address(base)
+    PC = addr.addr
+    for statement in statements:
+        lineno = statement[4]
+        if statement[0] == "instruction":
+            if data is not None:
+                error("instructions not permitted in .data segment",
+                      lineno=lineno)
+            if statement[1] or PC not in inv_labels:
+                # Label already exists or there is no label
+                print(statement[2].encode(),
+                      "//", "[0x{:08x}]".format(PC),
+                      statement[3], file=out_file)
+            else:
+                # Label exists at this PC
+                print(statement[2].encode(),
+                      "//", "[0x{:08x}]".format(PC),
+                      ", ".join(inv_labels[PC]) + ":", statement[3], file=out_file)
+        else:
+            # Directive
+            directive = statement[2]
+            directive_name = directive[0]
+            if directive_name == "data":
+                if data is not None:
+                    error("previous .data segment", lineno=lineno)
+                data = data_segment(PC)
+            elif directive_name == "byte":
+                directive_args = directive[1]
+                if data is None:
+                    data = data_segment(PC)
+                data.add_bytes(directive_args)
+            elif directive_name == "half":
+                directive_args = directive[1]
+                if data is None:
+                    data = data_segment(PC)
+                data.add_halfwords(directive_args)
+            elif directive_name == "word":
+                directive_args = directive[1]
+                if data is None:
+                    data = data_segment(PC)
+                data.add_words(directive_args)
+            elif directive_name == "align":
+                directive_args = directive[1]
+                if data is None:
+                    # .align in text segment
+                    b2add = align(PC, directive_args)
+                    if b2add % 4 != 0:
+                        error("instructions must be word-aligned",
+                              lineno=lineno)
+                    for i in range(0, b2add, 4):
+                        print("00000000 // [0x{:08x}]".format(PC),
+                              file=out_file)
+                else:
+                    data.align(directive_args)
+            elif directive_name == "label":
+                if data is None:
+                    # Print label to file
+                    print("//", directive[1], file=out_file)
+            elif directive_name == "excvector":
+                new_PC = (PC & 0xfffff000) | (directive[1] & 0xfff)
+                # Have a pass that verifies that it doesn't go backwards
+                for i in range(PC, new_PC, 4):
+                    print("00000000 // [0x{:08x}]".format(i),
+                          file=out_file)
+        _, PC = addr.advance(statement)
+    if data:
+        print(data.encode(labels), file=out_file)
+    return labels
+
+
+def preamble(name, clr, line):
+    if line is not None:
+        return "{}:{}: {}:".format(color(file, bold=True),
+                                   color(line, bold=True),
+                                   color(name, clr, bold=True))
+    else:
+        return "{}: {}:".format(color(file, bold=True),
+                                color(name, clr, bold=True))
+
+
+def error_message(*message, lineno=None):
+    """
+    Display an error message
+    """
+    print(preamble("error", "red", lineno),
+          *[color(str(m), bold=True) for m in message])
+    try:
+        print(contents[file][lineno-1].strip())
+    except:
+        pass
+
+
+def error(*message, lineno=None):
+    """
+    Display an error message and quit (raise SystemExit)
+    """
+    error_message(*message, lineno=lineno)
+    sys.exit(1)
+
+
+def note(*message, lineno=None):
+    """
+    Display a note
+    """
+    print(preamble("note", "black", lineno), *message)
+
+
+def warn(*message, lineno=None):
+    """
+    Display a warning message unless the quiet global variable is True
+    """
+    if not quiet:
+        print(preamble("warning", "magenta", lineno),
+              *[color(str(m), bold=True) for m in message])
+        try:
+            print(contents[file][lineno-1].strip())
+        except:
+            pass
+
+
+def include_boot_file(filename):
+    with open("boot/" + filename) as f:
+        return f.readlines()
+
+
+def cached_base(init_registers, dbg):
+    """
+    Boot code (for ram_reset_init.txt) when caching is enabled.
+    """
+    # Order of priorities
+    # For CPU 0:
+    #   CPU0 (if present)
+    #   main (if present)
+    #   first instruction in program
+    # For CPU 1:
+    #   CPU1 (if present)
+    #   busy-loop
+    if init_registers:
+        base = [
+            ".label Initilization Code",
+            "b $boot-CPU0",
+            "lui $a0, 0x9003",
+
+            "b $boot-CPU1",
+            "lui $a0, 0x9002",
+
+            # Both Cores will spin here if they return from their
+            # starting routines
+            "$halt: b $halt",
+            "nop",
+
+            "$boot-CPU0:",
+            "li $k0, CPU0",
+            "j $boot",
+            "nop",
+
+            "CPU1: .weak",
+            # Already contains the address of $halt
+            "jr $31",
+            "nop",
+
+            "$boot-CPU1:",
+            "li $k0, CPU1",
+            # Uncomment these if this is moved...
+            # "j $boot",
+            # "nop",
+
+            "$boot:",
+            "jal $init-cache",
+            "nop",
+            "li $a1, 0x9fc0",
+            "jal $init-registers",
+            "nop",
+            "jr $k0",
+            "nop"
+        ] + include_boot_file("init_registers.S")
+    else:
+        base = [
+            ".label Initilization Code",
+            "b $boot-CPU0",
+            "lui $k0, %hi(CPU0)",
+
+            "b $boot-CPU1",
+            "lui $k0, %hi(CPU1)",
+
+            "$boot-CPU0: jal $init-cache",
+            "ori $k0, $k0, %lo(CPU0)",
+            "jr $k0",
+            "nop",
+
+            "$boot-CPU1: jal $init-cache",
+            "ori $k0, $k0, %lo(CPU1)",
+            "jr $k0",
+            "nop",
+
+            "CPU1: .weak",
+            "lui $ra, 0x9fc0",
+            "ori $ra, $ra, %lo($halt)",
+            "jr $ra",
+            "nop",
+
+            "$halt: b $halt",
+            "nop",
+        ]
+    base += include_boot_file("init_cache.S")
+    if dbg:
+        base += include_boot_file("exception.S")
+    return base
+
+
+def uncached_base(init_registers, dbg):
+    """
+    Boot code (for ram_reset_init.txt) when caching is disabled.
+    """
+    if init_registers:
+        base = [
+            ".label Initilization Code",
+            "j $boot-CPU0",
+            "lui $k0, %hi(CPU0)",
+
+            "j $boot-CPU1",
+            "lui $k0, %hi(CPU1)",
+
+            "$boot-CPU0:",
+            "ori $k0, $k0, %lo(CPU0)",
+            "j $boot",
+            "lui $a0, 0xa003",
+
+            "CPU1: .weak",
+            "nop",
+            "$halt:",
+            "j $halt",
+            "nop",
+
+            "$boot-CPU1:",
+            "ori $k0, $k0, %lo(CPU1)",
+            "j $boot",
+            "lui $a0, 0xa002",
+
+            "$boot:",
+            "jal $init-registers",
+            "li $a1, 0xbfc0",
+            "jr $k0",
+            "nop",
+        ] + include_boot_file("init_registers.S")
+    else:
+        base = [
+            ".label Initialization Code",
+            "j $boot-CPU0",
+            "lui $k0, %hi(CPU0)",
+            "j $boot-CPU1",
+            "lui $k0, %hi(CPU1)",
+            "$boot-CPU0: ori $k0, $k0, %lo(CPU0)",
+            "jr $k0",
+            "nop",
+            "$boot-CPU1: ori $k0, $k0, %lo(CPU1)",
+            "CPU1: .weak",
+            "jr $k0",
+            "nop",
+        ]
+    if dbg:
+        base += include_boot_file("exception.S")
+    return base
+
+
+def main():
+    global quiet
+    default_user = []
+
+    parser = argparse.ArgumentParser(prog="assemble",
+                                     description="Assemble MIPS assembly "
+                                     "files for dual-core MIPSfpga")
+    parser.add_argument("file", help="file to assemble",
+                        default="-", nargs="?")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--uncached", dest="uncached",
+                       action="store_true", default=True,
+                       help="assemble into uncached kernel address space")
+    group.add_argument("--cached", dest="uncached",
+                       action="store_false", default=True,
+                       help="assemble into cached kernel address space")
+    parser.add_argument("--init-registers", dest="init_registers",
+                        action="store_true", default=False,
+                        help="initialize $sp, $gp, $ra prior to start of "
+                             "assembled program")
+    parser.add_argument("--debug", action="store_true", default=False,
+                        help="add code to get information on exceptions")
+    parser.add_argument("-q", "--quiet", action="store_true", default=False,
+                        help="suppress warnings")
+    parser.add_argument("--list-supported-instructions", dest="supported",
+                        action="store_true", default=False,
+                        help="list supported instructions, do not assemble")
+
+    args = parser.parse_args()
+
+    if args.supported:
+        list_supported_instructions()
+        return
+
+    program_file = "ram_program_init.txt"
+    reset_file = "ram_reset_init.txt"
+
+    try:
+        quiet = args.quiet
+        in_filename = args.file
+
+        if in_filename == "-":
+            # Read from stdin
+            lines = sys.stdin.readlines()
+            in_filename = "<stdin>"
+        else:
+            with open(args.file) as in_file:
+                lines = in_file.readlines()
+        if args.uncached:
+            with open(program_file, "w") as out_file:
+                labels = assemble_file(in_filename, 0xa0000000,
+                                       lines, out_file)
+            with open(reset_file, "w") as out_file:
+                assemble_file("<boot>", 0xbfc00000,
+                              uncached_base(args.init_registers, args.debug),
+                              out_file, prev=labels,
+                              weak={"CPU0": labels.get("main", 0xa0000000)})
+        else:
+            with open(program_file, "w") as out_file:
+                labels = assemble_file(in_filename, 0x80000000,
+                                       lines, out_file)
+            with open(reset_file, "w") as out_file:
+                assemble_file("<boot>", 0xbfc00000,
+                              cached_base(args.init_registers, args.debug),
+                              out_file, prev=labels,
+                              weak={"CPU0": labels.get("main", 0x80000000)})
+    except FileNotFoundError as e:
+        print(color("fatal", "red", bold=True) + ":",
+              "no such file or directory:",
+              "'" + e.filename + "'")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        pass
+    except SystemExit:
+        pass
+    except:
+        # Ideally, an error would be caught before this point...
+        error("unknown")
+
+if __name__ == '__main__':
+    main()

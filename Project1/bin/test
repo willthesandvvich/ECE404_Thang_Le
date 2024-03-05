@@ -1,0 +1,4 @@
+#!/bin/bash
+
+vvp -N -l /dev/null $1
+
